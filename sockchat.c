@@ -14,40 +14,43 @@
 
 void help_and_die()
 {
-    fputs("help:\n"
-          "    -nick nickname\n"
-          "        sets your nickname to 'nickname'\n\n"
-          "    -host example.com\n"
-          "        sets target host to 'example.com'\n\n"
-          "    -port 7890\n"
-          "        sets target port to 7890\n",
-          stderr);
+    fprintf(stderr,
+        "help:\n"
+        "    -nick nickname\n"
+        "        sets your nickname to 'nickname'\n\n"
+        "    -host example.com\n"
+        "        sets target host to 'example.com'\n\n"
+        "    -port 7890\n"
+        "        sets target port to 7890\n");
     die("");
 }
 
 int main(int argc, char* argv[])
 {
     /* configuration */
-    char nick[32] = "nickname";
     char* host = "example.com";
-    /* needs to be int if using sockaddr_in to connect */
     char* port = "1337";
+    char nick[MAX_NICK_LENGTH + 1] = "nickname";
+    unsigned short slot = 0;
 
     for (int i = 0; i < argc; ++i) {
-        if (strcmp(argv[i], "-nick") == 0)
-            strncpy(nick, argv[++i], 32);
-        else if (strcmp(argv[i], "-host") == 0)
+        if (strcmp(argv[i], "-host") == 0)
             host = argv[++i];
         else if (strcmp(argv[i], "-port") == 0)
             port = argv[++i];
-        else if (strcmp(argv[i], "-h") == 0)
+        else if (strcmp(argv[i], "-nick") == 0)
+            strncpy(nick, argv[++i], MAX_NICK_LENGTH);
+        else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
             help_and_die();
     }
+
+    /* null terminate the end of the nickname string */
+    nick[MAX_NICK_LENGTH] = '\0';
 
     printf("configuration:\n"
            "    nick: %s\n"
            "    host: %s\n"
-           "    port: %s\n",
+           "    port: %s\n\n",
            nick,
            host,
            port);
@@ -59,9 +62,9 @@ int main(int argc, char* argv[])
         die("failed to open socket file descriptor!\n");
 
     struct addrinfo hints;
-    /* AF_INET == ipv4 */
+    /* ipv4 */
     hints.ai_family = AF_INET;
-    /* SOCK_STREAM == tcp */
+    /* tcp */
     hints.ai_socktype = SOCK_STREAM;
 
     struct addrinfo* server_info;
@@ -75,44 +78,37 @@ int main(int argc, char* argv[])
     /* connect the socket (file descriptor) to the server */
     if (connect(socket_fd, server_info->ai_addr, server_info->ai_addrlen) == -1) {
         close(socket_fd);
-        die("failed to connect! (is the server up?)\n");
+        die("connection failed! (is the server up?)\n");
     }
 
     /* free the linked list */
     freeaddrinfo(server_info);
 
-    /*
-     * without getaddrinfo
-     * note: gethostbyname is depricated and does not work well with ipv6.
-     *       getaddrinfo is not supported by normal c standards like c89, c99, etc afaik.
-     */
-    /*
-    struct sockaddr_in socket_data;
-    struct hostent* server = gethostbyname(host);
-
-    memset(&socket_data, 0, sizeof(socket_data));
-    socket_data.sin_family = AF_INET;
-    socket_data.sin_port = htons(port);
-    memcpy(&socket_data.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
-
-    if (connect(socket_fd, (struct sockaddr*)&socket_data, sizeof(socket_data)) == -1) {
-        close(socket_fd);
-        die("failed to connect! (is the server up?)\n");
-    }
-    */
-
-    pre_setup(&socket_fd, nick);
+    if (pre_setup(&socket_fd, nick, &slot))
+        printf("pre setup returned with nick '%s' and slot %i\n", nick, slot);
+    else
+        fprintf(stderr, "pre setup failed!\n");
 
     pthread_t thread_chat_recv;
     pthread_t thread_chat_send;
     pthread_create(&thread_chat_recv, NULL, &chat_recv, NULL);
     pthread_create(&thread_chat_send, NULL, &chat_send, NULL);
 
+    /* constantly check if the client should shut down */
+    while (1) {
+        if (should_quit) {
+            pthread_cancel(thread_chat_recv);
+            pthread_cancel(thread_chat_send);
+            break;
+        }
+
+        usleep(1000 * 1000);
+    }
+
     /* wait until chat threads terminate */
     pthread_join(thread_chat_recv, NULL);
     pthread_join(thread_chat_send, NULL);
     /* close socket file descriptor */
     close(socket_fd);
-    printf("sucessfully shut down.\n");
     return 0;
 }

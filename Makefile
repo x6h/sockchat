@@ -14,4 +14,4 @@ $(bin): $(objs)
 	$(cc) $(cflags) -c $^
 
 clean:
-	rm -f *.o $(bin)
+	rm -f $(objs) $(bin)

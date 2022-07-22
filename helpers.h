@@ -4,5 +4,5 @@
 
 /* throw a fatal error */
 void die(const char* text);
-/* run a set of code before initialising send/recv threads */
-void pre_setup(int* socket_fd, const char* nick);
+/* a block of code meant to run before send/recv thread initialisation */
+int pre_setup(int* socket_fd, char* nick, unsigned short* slot);
