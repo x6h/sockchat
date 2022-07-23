@@ -1,5 +1,4 @@
 /* See LICENSE file for copyright and license details. */
-
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -8,19 +7,26 @@
 #include "chat.h"
 #include "globals.h"
 
+/* should the client expect a reply from the server */
+static int expecting_reply = 0;
+
 void* chat_recv(void* unused)
 {
-    char output[MAX_RECV_LENGTH] = "";
-
     while (1) {
+        char output[MAX_RECV_LENGTH] = "";
+
         if (recv(socket_fd, output, MAX_RECV_LENGTH, 0) != -1) {
-            /* check if server sent back a message to verify the sent message was recieved */
-            /* note: server specific message */
-            if (output[0] == 'r' && output[1] == 'd' && output[2] == '\0') {
-                expecting_reply = 0;
-                continue;
-            } else if (expecting_reply) {
-                fprintf(stderr, "server did not reply back!\n");
+            /*
+             * check if server sent back a message to verify the sent message was recieved
+             * note: reply must be set up serverside
+             */
+            if (expecting_reply) {
+                if (output[0] == '\x04' && output[1] == '\0') {
+                    expecting_reply = 0;
+                    continue;
+                } else {
+                    fprintf(stderr, "server did not reply back!\n");
+                }
             }
 
             /* print the received message */
@@ -33,9 +39,8 @@ void* chat_recv(void* unused)
 
 void* chat_send(void* unused)
 {
-    char input[MAX_SEND_LENGTH] = "";
-
     while (1) {
+        char input[MAX_SEND_LENGTH] = "";
         fgets(input, MAX_SEND_LENGTH, stdin);
 
         /* detect commands */
@@ -48,11 +53,10 @@ void* chat_send(void* unused)
             case 'q':
                 /* message sent to server */
                 strcpy(input, "(client) i am leaving!");
-                /* let main function know to terminate threads */
                 should_quit = 1;
                 break;
             default:
-                fprintf(stderr, "command not found. try '/h'.\n");
+                printf("command not found! (do '/h' for help)\n");
             }
         }
 

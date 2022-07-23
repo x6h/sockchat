@@ -2,7 +2,7 @@
 cc = gcc
 # compiler flags
 cflags = -std=gnu99 -Wall -Wextra -pedantic
-# object files to build
+# object files to compile
 objs = sockchat.o chat.o globals.o helpers.o
 # output binary name
 bin = sockchat
@@ -28,4 +28,4 @@ uninstall: $(bin)
 clean:
 	rm -f $(objs) $(bin)
 
-.PHONY: all build clean
+.PHONY: all build install uninstall clean
